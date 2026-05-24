@@ -36,7 +36,7 @@ jobs:
         env:
           MEDIAFIRE_URL: ${{ github.event.inputs.mediafire_url }}
           JOB_ID: ${{ github.event.inputs.job_id }}
-        run: python backend.worker
+        run: python -m backend.worker
 
       - name: Commit and Push Chunks
         run: |
