@@ -1,4 +1,1 @@
 # mediafire-github-bridge
-requests==2.31.0
-beautifulsoup4==4.12.2
-lxml==4.9.3
