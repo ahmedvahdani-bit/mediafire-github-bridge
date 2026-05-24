@@ -1,9 +1,11 @@
 import os
 import sys
+import re
+from urllib.parse import unquote
 from .utils import logger, ensure_directory, get_env_var
 from .downloader import MediaFireDownloader
 from .splitter import FileSplitter
-from .manifest import create_manifest
+from .manifest import create_master_manifest
 
 def main():
     logger.info("--- Starting GitHub Actions Automation Worker ---")
@@ -19,30 +21,59 @@ def main():
     temp_dir = os.path.join("data", "temp")
     ensure_directory(temp_dir)
     
-    # Extract intended filename (basic approximation from URL for temp storage)
-    temp_filename = "downloaded_file.tmp"
-    temp_filepath = os.path.join(temp_dir, temp_filename)
-    
     try:
-        # Phase 1: Download
-        logger.info(f"Initiating download for Job ID: {job_id}")
         downloader = MediaFireDownloader()
-        downloader.download_file(mediafire_url, temp_filepath)
         
-        # Determine actual file extension/name (For simplicity, wrapping in standard names, 
-        # normally you'd parse headers for 'Content-Disposition')
-        original_name = "archive.zip" # Default generic name
-        final_temp_path = os.path.join(temp_dir, original_name)
-        os.rename(temp_filepath, final_temp_path)
+        # Phase 1: Resolve URLs (Supports both single files and folders)
+        logger.info(f"Analyzing Target URL: {mediafire_url}")
+        file_urls = downloader.resolve_urls(mediafire_url)
         
-        # Phase 2: Split
-        logger.info("Initiating file splitting...")
+        if not file_urls:
+            logger.error("No valid files found to download. Exiting.")
+            sys.exit(1)
+            
         splitter = FileSplitter(chunk_size_mb=90)
-        chunks = splitter.split(final_temp_path, job_dir)
+        all_files_metadata = []
         
-        # Phase 3: Manifest Generation
-        logger.info("Generating manifest...")
-        create_manifest(job_id, original_name, chunks, job_dir)
+        # Loop through each found file
+        for index, file_url in enumerate(file_urls, start=1):
+            logger.info(f"\n>>> Processing File {index} of {len(file_urls)} <<<")
+            logger.info(f"Target Link: {file_url}")
+            
+            # Extract original filename from the MediaFire URL
+            filename_match = re.search(r'/file/[^/]+/([^/]+)', file_url)
+            if filename_match:
+                original_name = unquote(filename_match.group(1))
+                # Clean invalid characters from filename
+                original_name = re.sub(r'[\\/*?:"<>|]', "", original_name)
+            else:
+                original_name = f"downloaded_file_{index}.bin"
+                
+            logger.info(f"Extracted Filename: {original_name}")
+            
+            temp_filepath = os.path.join(temp_dir, f"temp_{index}.tmp")
+            
+            # Phase 2: Download
+            downloader.download_file(file_url, temp_filepath)
+            
+            # Rename temp file to original name for accurate splitting
+            final_temp_path = os.path.join(temp_dir, original_name)
+            os.rename(temp_filepath, final_temp_path)
+            
+            # Phase 3: Split
+            logger.info(f"Splitting {original_name}...")
+            chunks = splitter.split(final_temp_path, job_dir)
+            
+            # Store metadata for this specific file
+            all_files_metadata.append({
+                "original_filename": original_name,
+                "total_chunks": len(chunks),
+                "chunks": chunks
+            })
+        
+        # Phase 4: Master Manifest Generation
+        logger.info("\nGenerating master manifest for all files...")
+        create_master_manifest(job_id, all_files_metadata, job_dir)
         
         logger.info("--- Worker Execution Completed Successfully ---")
         
