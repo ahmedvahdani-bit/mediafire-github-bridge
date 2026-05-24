@@ -11,6 +11,31 @@ class MediaFireDownloader:
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36"
         })
 
+    def resolve_urls(self, url: str) -> list:
+        """Checks if URL is a folder and extracts all file links."""
+        if "/folder/" in url:
+            logger.info(f"Folder detected. Scanning for files in: {url}")
+            try:
+                response = self.session.get(url, timeout=15)
+                response.raise_for_status()
+                
+                # Regex pattern to find all MediaFire file links in the folder HTML
+                pattern = r'https?://(?:www\.)?mediafire\.com/file/[a-zA-Z0-9_-]+/[^/"\'<>\s]+'
+                links = list(set(re.findall(pattern, response.text)))
+                
+                if not links:
+                    logger.warning("No file links found in the folder.")
+                else:
+                    logger.info(f"Found {len(links)} unique files in the folder.")
+                
+                return links
+            except Exception as e:
+                logger.error(f"Failed to scan folder: {e}")
+                raise
+        else:
+            # If it's a single file, return it as a list of one item
+            return [url]
+
     def extract_direct_link(self, url: str) -> str:
         """Scrapes the MediaFire page to find the actual direct download link."""
         logger.info(f"Extracting direct link from: {url}")
@@ -23,12 +48,13 @@ class MediaFireDownloader:
             
             if download_btn and 'href' in download_btn.attrs:
                 direct_link = download_btn['href']
-                logger.info(f"Direct link found: {direct_link}")
+                logger.info("Direct link found successfully.")
                 return direct_link
             
             # Fallback regex if HTML structure changes
             match = re.search(r'href="(https://download\d+\.mediafire\.com/[^"]+)"', response.text)
             if match:
+                logger.info("Direct link found via fallback regex.")
                 return match.group(1)
                 
             raise ValueError("Could not locate direct download link.")
