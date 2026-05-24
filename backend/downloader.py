@@ -12,28 +12,48 @@ class MediaFireDownloader:
         })
 
     def resolve_urls(self, url: str) -> list:
-        """Checks if URL is a folder and extracts all file links."""
+        """Checks if URL is a folder and extracts all file links using MediaFire API."""
         if "/folder/" in url:
             logger.info(f"Folder detected. Scanning for files in: {url}")
             try:
-                response = self.session.get(url, timeout=15)
-                response.raise_for_status()
+                # Extract folder key from the URL
+                match = re.search(r'/folder/([a-zA-Z0-9]+)', url)
+                if not match:
+                    logger.error("Could not extract folder key from URL.")
+                    return []
                 
-                # Regex pattern to find all MediaFire file links in the folder HTML
-                pattern = r'https?://(?:www\.)?mediafire\.com/file/[a-zA-Z0-9_-]+/[^/"\'<>\s]+'
-                links = list(set(re.findall(pattern, response.text)))
+                folder_key = match.group(1)
+                logger.info(f"Extracted folder key: {folder_key}")
+                
+                # Call MediaFire's internal API to get folder contents dynamically
+                api_url = f"https://www.mediafire.com/api/1.4/folder/get_content.php?folder_key={folder_key}&content_type=files&response_format=json"
+                
+                response = self.session.get(api_url, timeout=15)
+                response.raise_for_status()
+                data = response.json()
+                
+                # Parse JSON response
+                files = data.get('response', {}).get('folder_content', {}).get('files', [])
+                
+                links = []
+                for f in files:
+                    quickkey = f.get('quickkey')
+                    filename = f.get('filename')
+                    if quickkey:
+                        # Construct the standard MediaFire file URL
+                        file_link = f"https://www.mediafire.com/file/{quickkey}/{filename}"
+                        links.append(file_link)
                 
                 if not links:
-                    logger.warning("No file links found in the folder.")
+                    logger.warning("No file links found in the folder via API.")
                 else:
                     logger.info(f"Found {len(links)} unique files in the folder.")
                 
                 return links
             except Exception as e:
-                logger.error(f"Failed to scan folder: {e}")
+                logger.error(f"Failed to scan folder via API: {e}")
                 raise
         else:
-            # If it's a single file, return it as a list of one item
             return [url]
 
     def extract_direct_link(self, url: str) -> str:
