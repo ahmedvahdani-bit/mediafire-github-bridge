@@ -24,7 +24,7 @@ def main():
     try:
         downloader = MediaFireDownloader()
         
-        # Phase 1: Resolve URLs (Supports both single files and folders)
+        # Phase 1: Resolve URLs
         logger.info(f"Analyzing Target URL: {mediafire_url}")
         file_urls = downloader.resolve_urls(mediafire_url)
         
@@ -38,27 +38,40 @@ def main():
         # Loop through each found file
         for index, file_url in enumerate(file_urls, start=1):
             logger.info(f"\n>>> Processing File {index} of {len(file_urls)} <<<")
-            logger.info(f"Target Link: {file_url}")
             
-            # Extract original filename from the MediaFire URL
+            # Extract original filename
             filename_match = re.search(r'/file/[^/]+/([^/]+)', file_url)
             if filename_match:
                 original_name = unquote(filename_match.group(1))
-                # Clean invalid characters from filename
                 original_name = re.sub(r'[\\/*?:"<>|]', "", original_name)
             else:
                 original_name = f"downloaded_file_{index}.bin"
                 
-            logger.info(f"Extracted Filename: {original_name}")
-            
-            # Create a specific sub-directory for this exact file (removing extension for clean folder name)
             file_base_name = os.path.splitext(original_name)[0]
             if not file_base_name:
                 file_base_name = f"file_{index}"
                 
             file_specific_dir = os.path.join(job_dir, file_base_name)
-            ensure_directory(file_specific_dir)
             
+            # -------------------------------------------------------------
+            # NEW LOGIC: Check if file already exists to Skip/Resume
+            # -------------------------------------------------------------
+            if os.path.exists(file_specific_dir) and os.listdir(file_specific_dir):
+                logger.info(f"⏭️ SKIPPING: Folder '{file_base_name}' already exists and contains files.")
+                
+                # Read existing files to include them in the manifest
+                existing_chunks = sorted([f for f in os.listdir(file_specific_dir) if os.path.isfile(os.path.join(file_specific_dir, f))])
+                
+                all_files_metadata.append({
+                    "original_filename": original_name,
+                    "folder_name": file_base_name,
+                    "total_chunks": len(existing_chunks),
+                    "chunks": [f"{file_base_name}/{c}" for c in existing_chunks]
+                })
+                continue # Skip downloading and splitting, go to the next file
+            # -------------------------------------------------------------
+            
+            ensure_directory(file_specific_dir)
             temp_filepath = os.path.join(temp_dir, f"temp_{index}.tmp")
             
             # Phase 2: Download
@@ -72,7 +85,7 @@ def main():
             logger.info(f"Splitting {original_name} into folder: {file_specific_dir}")
             chunks = splitter.split(final_temp_path, file_specific_dir)
             
-            # Store metadata for this specific file, including its sub-folder path
+            # Store metadata
             all_files_metadata.append({
                 "original_filename": original_name,
                 "folder_name": file_base_name,
