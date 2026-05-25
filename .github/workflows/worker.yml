@@ -38,7 +38,7 @@ jobs:
           JOB_ID: ${{ github.event.inputs.job_id }}
         run: python -m backend.worker
 
-      - name: Commit and Push Chunks (Incremental)
+      - name: Commit and Push Chunks (Recursive & Incremental)
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
@@ -50,16 +50,14 @@ jobs:
           
           # Check if job directory exists
           if [ -d "$JOB_DIR" ]; then
-            # Loop through each file and push individually
-            for FILE in "$JOB_DIR"/*; do
-              if [ -f "$FILE" ]; then
-                echo "Committing and pushing $FILE..."
-                git add "$FILE"
-                git commit -m "Auto-upload chunk: $(basename "$FILE")" || echo "Nothing to commit for $FILE"
-                
-                # Push with a retry mechanism in case of temporary network glitches
-                git push origin main || (echo "Push failed, retrying in 10 seconds..." && sleep 10 && git push origin main)
-              fi
+            # Use 'find' command to recursively search through all specific file sub-folders
+            find "$JOB_DIR" -type f | while read -r FILE; do
+              echo "Committing and pushing $FILE..."
+              git add "$FILE"
+              git commit -m "Auto-upload chunk: $(basename "$FILE")" || echo "Nothing to commit for $FILE"
+              
+              # Push with a retry mechanism in case of temporary network glitches
+              git push origin main || (echo "Push failed, retrying in 10 seconds..." && sleep 10 && git push origin main)
             done
           else
             echo "No job directory found to upload."
