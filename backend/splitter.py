@@ -1,4 +1,5 @@
 import os
+import shutil
 from .utils import logger
 
 class FileSplitter:
@@ -7,17 +8,20 @@ class FileSplitter:
         self.chunk_size_bytes = chunk_size_mb * 1024 * 1024
 
     def split(self, file_path: str, output_dir: str) -> list:
-        """Splits a large file into chunks of self.chunk_size_bytes."""
-        logger.info(f"Starting split for {file_path} into {self.chunk_size_bytes} byte chunks.")
+        """Splits a large file or moves a small file directly to the output directory."""
+        logger.info(f"Processing file: {file_path}")
         
         file_size = os.path.getsize(file_path)
         base_name = os.path.basename(file_path)
-        chunks = []
         
+        # If file is smaller than 90MB, just move it to the output folder
         if file_size <= self.chunk_size_bytes:
-            logger.info("File is smaller than chunk size. No splitting required.")
-            return [file_path]
+            logger.info("File is smaller than chunk size. Moving directly to output directory.")
+            dest_path = os.path.join(output_dir, base_name)
+            shutil.move(file_path, dest_path)
+            return [base_name]
             
+        chunks = []
         with open(file_path, 'rb') as f:
             chunk_num = 1
             while True:
@@ -32,11 +36,10 @@ class FileSplitter:
                     chunk_file.write(chunk_data)
                     
                 chunks.append(chunk_filename)
-                logger.info(f"Created chunk: {chunk_filename} ({len(chunk_data)} bytes)")
+                logger.info(f"Created chunk: {chunk_filename}")
                 chunk_num += 1
                 
-        # Optional: Remove original large file to save Action runner space
+        # Remove original temp file after successful split
         os.remove(file_path)
-        logger.info("Original file removed from runner after successful split.")
         
         return chunks
