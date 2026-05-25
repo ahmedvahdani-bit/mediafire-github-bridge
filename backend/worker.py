@@ -51,6 +51,14 @@ def main():
                 
             logger.info(f"Extracted Filename: {original_name}")
             
+            # Create a specific sub-directory for this exact file (removing extension for clean folder name)
+            file_base_name = os.path.splitext(original_name)[0]
+            if not file_base_name:
+                file_base_name = f"file_{index}"
+                
+            file_specific_dir = os.path.join(job_dir, file_base_name)
+            ensure_directory(file_specific_dir)
+            
             temp_filepath = os.path.join(temp_dir, f"temp_{index}.tmp")
             
             # Phase 2: Download
@@ -60,15 +68,16 @@ def main():
             final_temp_path = os.path.join(temp_dir, original_name)
             os.rename(temp_filepath, final_temp_path)
             
-            # Phase 3: Split
-            logger.info(f"Splitting {original_name}...")
-            chunks = splitter.split(final_temp_path, job_dir)
+            # Phase 3: Split into the specific sub-directory
+            logger.info(f"Splitting {original_name} into folder: {file_specific_dir}")
+            chunks = splitter.split(final_temp_path, file_specific_dir)
             
-            # Store metadata for this specific file
+            # Store metadata for this specific file, including its sub-folder path
             all_files_metadata.append({
                 "original_filename": original_name,
+                "folder_name": file_base_name,
                 "total_chunks": len(chunks),
-                "chunks": chunks
+                "chunks": [f"{file_base_name}/{c}" for c in chunks]
             })
         
         # Phase 4: Master Manifest Generation
