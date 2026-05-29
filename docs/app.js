@@ -16,7 +16,6 @@ document.getElementById('startBtn').addEventListener('click', async () => {
     updateStatus('RUNNING', 'running');
     logToConsole(`Initializing Universal V2 dispatch for Job: ${jobId}`);
     logToConsole(`Target URL: ${targetUrl.substring(0, 40)}...`);
-    logToConsole(`Quality Strategy: ${quality}`);
     
     const apiUrl = `https://api.github.com/repos/${user}/${repo}/actions/workflows/worker.yml/dispatches`;
     
@@ -44,25 +43,19 @@ document.getElementById('startBtn').addEventListener('click', async () => {
             throw new Error(`API Error ${response.status}: ${errData.message}`);
         }
 
-        logToConsole('V2 Workflow triggered successfully.');
-        logToConsole('Check GitHub Actions tab for live yt-dlp logs.');
+        logToConsole('Workflow triggered successfully.');
+        logToConsole('Please wait while GitHub Actions processes the files.');
         
-        // Generate Codeload Link
-        const codeloadUrl = `https://codeload.github.com/${user}/${repo}/zip/refs/heads/main`;
-        const linkEl = document.getElementById('codeloadLink');
-        linkEl.href = codeloadUrl;
-        linkEl.innerText = codeloadUrl;
-        linkEl.classList.remove('disabled');
-
         // Generate RAW Github Content Link for the Manifest
         // Format: https://raw.githubusercontent.com/USER/REPO/main/data/jobs/JOB_ID/master_manifest.json
         const rawUrl = `https://raw.githubusercontent.com/${user}/${repo}/main/data/jobs/${jobId}/master_manifest.json`;
         const rawEl = document.getElementById('rawManifestLink');
         rawEl.href = rawUrl;
+        rawEl.innerText = "Click here for Direct Raw Links (Available after job finishes)";
         rawEl.classList.remove('disabled');
 
         setTimeout(() => {
-            updateStatus('DISPATCHED (Processing...)', 'success');
+            updateStatus('DISPATCHED (Check Repo)', 'success');
         }, 3000);
 
     } catch (error) {
