@@ -1,102 +1,72 @@
 import requests
 import re
-from bs4 import BeautifulSoup
 import os
+import yt_dlp
 from .utils import logger
 
-class MediaFireDownloader:
+class UniversalDownloader:
     def __init__(self):
         self.session = requests.Session()
         self.session.headers.update({
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36"
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/115.0.0.0 Safari/537.36"
         })
 
-    def resolve_urls(self, url: str) -> list:
-        """Checks if URL is a folder and extracts all file links using MediaFire API."""
-        if "/folder/" in url:
-            logger.info(f"Folder detected. Scanning for files in: {url}")
-            try:
-                # Extract folder key from the URL
-                match = re.search(r'/folder/([a-zA-Z0-9]+)', url)
-                if not match:
-                    logger.error("Could not extract folder key from URL.")
-                    return []
-                
-                folder_key = match.group(1)
-                logger.info(f"Extracted folder key: {folder_key}")
-                
-                # Call MediaFire's internal API to get folder contents dynamically
-                api_url = f"https://www.mediafire.com/api/1.4/folder/get_content.php?folder_key={folder_key}&content_type=files&response_format=json"
-                
-                response = self.session.get(api_url, timeout=15)
-                response.raise_for_status()
-                data = response.json()
-                
-                # Parse JSON response
-                files = data.get('response', {}).get('folder_content', {}).get('files', [])
-                
-                links = []
-                for f in files:
-                    quickkey = f.get('quickkey')
-                    filename = f.get('filename')
-                    if quickkey:
-                        # Construct the standard MediaFire file URL
-                        file_link = f"https://www.mediafire.com/file/{quickkey}/{filename}"
-                        links.append(file_link)
-                
-                if not links:
-                    logger.warning("No file links found in the folder via API.")
-                else:
-                    logger.info(f"Found {len(links)} unique files in the folder.")
-                
-                return links
-            except Exception as e:
-                logger.error(f"Failed to scan folder via API: {e}")
-                raise
-        else:
-            return [url]
+    def is_mediafire_folder(self, url: str) -> bool:
+        return "mediafire.com/folder/" in url
 
-    def extract_direct_link(self, url: str) -> str:
-        """Scrapes the MediaFire page to find the actual direct download link."""
-        logger.info(f"Extracting direct link from: {url}")
+    def resolve_mediafire_folder(self, url: str) -> list:
+        """Extracts files from MediaFire API."""
+        logger.info(f"Scanning MediaFire folder: {url}")
         try:
-            response = self.session.get(url, timeout=15)
+            match = re.search(r'/folder/([a-zA-Z0-9]+)', url)
+            if not match: return []
+            
+            folder_key = match.group(1)
+            api_url = f"https://www.mediafire.com/api/1.4/folder/get_content.php?folder_key={folder_key}&content_type=files&response_format=json"
+            
+            response = self.session.get(api_url, timeout=15)
             response.raise_for_status()
+            files = response.json().get('response', {}).get('folder_content', {}).get('files', [])
             
-            soup = BeautifulSoup(response.text, 'lxml')
-            download_btn = soup.find('a', id='downloadButton')
-            
-            if download_btn and 'href' in download_btn.attrs:
-                direct_link = download_btn['href']
-                logger.info("Direct link found successfully.")
-                return direct_link
-            
-            # Fallback regex if HTML structure changes
-            match = re.search(r'href="(https://download\d+\.mediafire\.com/[^"]+)"', response.text)
-            if match:
-                logger.info("Direct link found via fallback regex.")
-                return match.group(1)
-                
-            raise ValueError("Could not locate direct download link.")
-            
+            return [f"https://www.mediafire.com/file/{f.get('quickkey')}/{f.get('filename')}" for f in files if f.get('quickkey')]
         except Exception as e:
-            logger.error(f"Failed to extract direct link: {e}")
-            raise
+            logger.error(f"MediaFire API error: {e}")
+            return []
 
-    def download_file(self, url: str, output_path: str) -> str:
-        """Downloads the file robustly using streaming."""
-        direct_link = self.extract_direct_link(url)
+    def download_with_ytdlp(self, url: str, quality: str, output_dir: str) -> str:
+        """Handles YouTube, Generic Direct Links, and single MediaFire files using yt-dlp."""
+        logger.info(f"Using yt-dlp to process: {url}")
         
-        logger.info(f"Starting download to {output_path}")
+        # Map quality input to yt-dlp format codes
+        format_string = 'bestvideo+bestaudio/best'
+        if quality == '1080p':
+            format_string = 'bestvideo[height<=1080]+bestaudio/best[height<=1080]'
+        elif quality == '720p':
+            format_string = 'bestvideo[height<=720]+bestaudio/best[height<=720]'
+        elif quality == 'audio':
+            format_string = 'bestaudio/best'
+
+        ydl_opts = {
+            'format': format_string,
+            'outtmpl': os.path.join(output_dir, '%(title)s.%(ext)s'),
+            'restrictfilenames': True,  # Ensures safe filenames
+            'no_warnings': True,
+            'merge_output_format': 'mp4', # Prefer mp4 for videos
+        }
+
         try:
-            with self.session.get(direct_link, stream=True, timeout=20) as r:
-                r.raise_for_status()
-                with open(output_path, 'wb') as f:
-                    for chunk in r.iter_content(chunk_size=8192):
-                        if chunk:
-                            f.write(chunk)
-            logger.info("Download completed successfully.")
-            return output_path
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                info_dict = ydl.extract_info(url, download=True)
+                downloaded_file_path = ydl.prepare_filename(info_dict)
+                
+                # Check if it was merged into a different extension (like .mp4 or .mkv)
+                base, ext = os.path.splitext(downloaded_file_path)
+                expected_merged_path = base + '.' + ydl_opts.get('merge_output_format', 'mp4')
+                
+                if os.path.exists(expected_merged_path):
+                    return expected_merged_path
+                return downloaded_file_path
+                
         except Exception as e:
-            logger.error(f"Download failed: {e}")
+            logger.error(f"yt-dlp failed: {e}")
             raise
