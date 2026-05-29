@@ -1,16 +1,19 @@
 import os
 import sys
+import re
+from urllib.parse import unquote, quote
 from .utils import logger, ensure_directory, get_env_var
 from .downloader import UniversalDownloader
 from .splitter import FileSplitter
 from .manifest import create_master_manifest
 
 def main():
-    logger.info("--- Starting Universal Downloader V2 ---")
+    logger.info("--- Starting Universal Downloader V2.1 ---")
     
     target_url = get_env_var("TARGET_URL")
     job_id = get_env_var("JOB_ID")
     quality = get_env_var("QUALITY", "best")
+    github_repo = get_env_var("GITHUB_REPO", "") # Format: username/repo
     
     job_dir = os.path.join("data", "jobs", job_id)
     temp_dir = os.path.join("data", "temp")
@@ -22,7 +25,6 @@ def main():
     all_files_metadata = []
     
     try:
-        # Determine Flow based on URL type
         urls_to_process = []
         if downloader.is_mediafire_folder(target_url):
             logger.info("MediaFire Folder flow selected.")
@@ -39,47 +41,47 @@ def main():
             logger.info(f"\n>>> Processing Link {index}/{len(urls_to_process)} <<<")
             
             try:
-                # Download using the universal yt-dlp engine
                 downloaded_file_path = downloader.download_with_ytdlp(url, quality, temp_dir)
-                
                 original_name = os.path.basename(downloaded_file_path)
                 file_base_name = os.path.splitext(original_name)[0]
-                
                 file_specific_dir = os.path.join(job_dir, file_base_name)
                 
                 # Resume/Skip Logic
                 if os.path.exists(file_specific_dir) and os.listdir(file_specific_dir):
                     logger.info(f"⏭️ SKIPPING: Folder '{file_base_name}' already exists.")
                     existing_chunks = sorted([f for f in os.listdir(file_specific_dir) if os.path.isfile(os.path.join(file_specific_dir, f))])
-                    all_files_metadata.append({
-                        "original_filename": original_name,
-                        "folder_name": file_base_name,
-                        "total_chunks": len(existing_chunks),
-                        "chunks": [f"{file_base_name}/{c}" for c in existing_chunks]
-                    })
+                    chunks = existing_chunks
                     if os.path.exists(downloaded_file_path):
-                        os.remove(downloaded_file_path) # Cleanup temp
-                    continue
+                        os.remove(downloaded_file_path)
+                else:
+                    ensure_directory(file_specific_dir)
+                    logger.info(f"Splitting {original_name} into {file_specific_dir}")
+                    chunks = splitter.split(downloaded_file_path, file_specific_dir)
                 
-                ensure_directory(file_specific_dir)
+                # Format chunk paths
+                chunk_paths = [f"{file_base_name}/{c}" for c in chunks]
                 
-                # Split Logic
-                logger.info(f"Splitting {original_name} into {file_specific_dir}")
-                chunks = splitter.split(downloaded_file_path, file_specific_dir)
+                # Generate RAW Download Links
+                raw_links = []
+                if github_repo:
+                    for c_path in chunk_paths:
+                        safe_path = quote(c_path) # Convert spaces to %20
+                        raw_url = f"https://raw.githubusercontent.com/{github_repo}/main/data/jobs/{job_id}/{safe_path}"
+                        raw_links.append(raw_url)
                 
                 all_files_metadata.append({
                     "original_filename": original_name,
                     "folder_name": file_base_name,
                     "total_chunks": len(chunks),
-                    "chunks": [f"{file_base_name}/{c}" for c in chunks]
+                    "chunks": chunk_paths,
+                    "raw_download_links": raw_links
                 })
                 
             except Exception as item_err:
                 logger.error(f"Failed to process item {url}: {item_err}")
-                continue # Continue with the next file even if one fails
+                continue
 
-        # Master Manifest Generation
-        logger.info("\nGenerating master manifest...")
+        logger.info("\nGenerating master manifest with Raw Links...")
         create_master_manifest(job_id, all_files_metadata, job_dir)
         logger.info("--- V2 Worker Execution Completed ---")
         
