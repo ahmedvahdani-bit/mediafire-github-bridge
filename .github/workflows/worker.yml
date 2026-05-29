@@ -1,4 +1,4 @@
-name: Universal Chunk Fetcher V2
+name: Universal Chunk Fetcher V2.2
 
 on:
   workflow_dispatch:
@@ -44,6 +44,7 @@ jobs:
           JOB_ID: ${{ github.event.inputs.job_id }}
           QUALITY: ${{ github.event.inputs.quality }}
           GITHUB_REPO: ${{ github.repository }}
+          YT_COOKIES: ${{ secrets.YT_COOKIES }}
         run: python -m backend.worker
 
       - name: Commit and Push Chunks (Recursive & Incremental)
