@@ -2,24 +2,25 @@ document.getElementById('startBtn').addEventListener('click', async () => {
     const pat = document.getElementById('patToken').value.trim();
     const user = document.getElementById('ghUser').value.trim();
     const repo = document.getElementById('ghRepo').value.trim();
-    const mfUrl = document.getElementById('mfUrl').value.trim();
+    const targetUrl = document.getElementById('targetUrl').value.trim();
+    const quality = document.getElementById('qualitySelect').value;
 
-    if (!pat || !user || !repo || !mfUrl) {
-        logToConsole('Error: All fields are required!', 'error');
+    if (!pat || !user || !repo || !targetUrl) {
+        logToConsole('Error: Token, Username, Repo, and URL are required!', 'error');
         return;
     }
 
-    // Generate unique Job ID using timestamp
     const jobId = 'job_' + Date.now();
     document.getElementById('currentJobId').innerText = jobId;
     
     updateStatus('RUNNING', 'running');
-    logToConsole(`Initializing workflow dispatch for Job: ${jobId}`);
+    logToConsole(`Initializing Universal V2 dispatch for Job: ${jobId}`);
+    logToConsole(`Target URL: ${targetUrl.substring(0, 40)}...`);
+    logToConsole(`Quality Strategy: ${quality}`);
     
     const apiUrl = `https://api.github.com/repos/${user}/${repo}/actions/workflows/worker.yml/dispatches`;
     
     try {
-        // Trigger GitHub Action
         const response = await fetch(apiUrl, {
             method: 'POST',
             headers: {
@@ -31,8 +32,9 @@ document.getElementById('startBtn').addEventListener('click', async () => {
             body: JSON.stringify({
                 ref: 'main',
                 inputs: {
-                    mediafire_url: mfUrl,
-                    job_id: jobId
+                    target_url: targetUrl,
+                    job_id: jobId,
+                    quality: quality
                 }
             })
         });
@@ -42,22 +44,26 @@ document.getElementById('startBtn').addEventListener('click', async () => {
             throw new Error(`API Error ${response.status}: ${errData.message}`);
         }
 
-        logToConsole('Workflow triggered successfully. System is now processing backend tasks.');
-        logToConsole('Please wait while files are downloaded, split, and committed (This may take several minutes)...');
+        logToConsole('V2 Workflow triggered successfully.');
+        logToConsole('Check GitHub Actions tab for live yt-dlp logs.');
         
-        // Generate Codeload Link immediately for future reference
+        // Generate Codeload Link
         const codeloadUrl = `https://codeload.github.com/${user}/${repo}/zip/refs/heads/main`;
         const linkEl = document.getElementById('codeloadLink');
         linkEl.href = codeloadUrl;
         linkEl.innerText = codeloadUrl;
         linkEl.classList.remove('disabled');
 
-        // Optional: Polling logic could be added here using GET /repos/{owner}/{repo}/actions/runs
-        // For simplicity in this static architecture, we assume completion or manual check via Actions tab.
+        // Generate RAW Github Content Link for the Manifest
+        // Format: https://raw.githubusercontent.com/USER/REPO/main/data/jobs/JOB_ID/master_manifest.json
+        const rawUrl = `https://raw.githubusercontent.com/${user}/${repo}/main/data/jobs/${jobId}/master_manifest.json`;
+        const rawEl = document.getElementById('rawManifestLink');
+        rawEl.href = rawUrl;
+        rawEl.classList.remove('disabled');
+
         setTimeout(() => {
-            updateStatus('COMPLETED (Check Repo)', 'success');
-            logToConsole('Workflow dispatch completed. Check your GitHub Actions tab for live pipeline logs.');
-        }, 5000);
+            updateStatus('DISPATCHED (Processing...)', 'success');
+        }, 3000);
 
     } catch (error) {
         updateStatus('FAILED', 'error');
