@@ -1,12 +1,16 @@
+// --- CONFIGURATION ---
+// Hardcode public details here to simplify the UI
+const GITHUB_USERNAME = "YOUR_USERNAME_HERE"; // مثال: ahmedvahdani-bit
+const GITHUB_REPO = "YOUR_REPO_NAME_HERE";    // مثال: mediafire-github-bridge
+// ---------------------
+
 document.getElementById('startBtn').addEventListener('click', async () => {
     const pat = document.getElementById('patToken').value.trim();
-    const user = document.getElementById('ghUser').value.trim();
-    const repo = document.getElementById('ghRepo').value.trim();
     const targetUrl = document.getElementById('targetUrl').value.trim();
     const quality = document.getElementById('qualitySelect').value;
 
-    if (!pat || !user || !repo || !targetUrl) {
-        logToConsole('Error: Token, Username, Repo, and URL are required!', 'error');
+    if (!pat || !targetUrl) {
+        logToConsole('Error: Token and URL are required!', 'error');
         return;
     }
 
@@ -14,10 +18,9 @@ document.getElementById('startBtn').addEventListener('click', async () => {
     document.getElementById('currentJobId').innerText = jobId;
     
     updateStatus('RUNNING', 'running');
-    logToConsole(`Initializing Universal V2 dispatch for Job: ${jobId}`);
-    logToConsole(`Target URL: ${targetUrl.substring(0, 40)}...`);
+    logToConsole(`Initializing dispatch for Job: ${jobId}`);
     
-    const apiUrl = `https://api.github.com/repos/${user}/${repo}/actions/workflows/worker.yml/dispatches`;
+    const apiUrl = `https://api.github.com/repos/${GITHUB_USERNAME}/${GITHUB_REPO}/actions/workflows/worker.yml/dispatches`;
     
     try {
         const response = await fetch(apiUrl, {
@@ -44,18 +47,15 @@ document.getElementById('startBtn').addEventListener('click', async () => {
         }
 
         logToConsole('Workflow triggered successfully.');
-        logToConsole('Please wait while GitHub Actions processes the files.');
         
-        // Generate RAW Github Content Link for the Manifest
-        // Format: https://raw.githubusercontent.com/USER/REPO/main/data/jobs/JOB_ID/master_manifest.json
-        const rawUrl = `https://raw.githubusercontent.com/${user}/${repo}/main/data/jobs/${jobId}/master_manifest.json`;
+        const rawUrl = `https://raw.githubusercontent.com/${GITHUB_USERNAME}/${GITHUB_REPO}/main/data/jobs/${jobId}/master_manifest.json`;
         const rawEl = document.getElementById('rawManifestLink');
         rawEl.href = rawUrl;
         rawEl.innerText = "Click here for Direct Raw Links (Available after job finishes)";
         rawEl.classList.remove('disabled');
 
         setTimeout(() => {
-            updateStatus('DISPATCHED (Check Repo)', 'success');
+            updateStatus('DISPATCHED', 'success');
         }, 3000);
 
     } catch (error) {
