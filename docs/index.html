@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Universal Cloud Bridge V2.2</title>
+    <title>Universal Cloud Bridge V2.3</title>
     <link rel="stylesheet" href="style.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
 </head>
@@ -11,27 +11,16 @@
     <div class="background-mesh"></div>
     <main class="container glass-panel">
         <header>
-            <h1>☁️ Universal Cloud Bridge <span style="color:var(--primary)">V2.2</span></h1>
-            <p>Support: MediaFire, YouTube (With Cookies), Direct Links</p>
+            <h1>☁️ Universal Cloud Bridge <span style="color:var(--primary)">V2.3</span></h1>
+            <p>Automated Secure Downloader</p>
         </header>
 
         <section class="form-group">
-            <label for="patToken">GitHub PAT Token</label>
+            <label for="patToken">GitHub PAT Token (Required for API Access)</label>
             <input type="password" id="patToken" placeholder="ghp_xxxxxxxxxxxxxxxxxxxx">
-            
-            <div>
-                <div>
-                    <label for="ghUser">GitHub Username</label>
-                    <input type="text" id="ghUser" placeholder="e.g. torvalds">
-                </div>
-                <div>
-                    <label for="ghRepo">Repository Name</label>
-                    <input type="text" id="ghRepo" placeholder="e.g. cloud-bridge">
-                </div>
-            </div>
 
             <label for="targetUrl">Download URL</label>
-            <input type="url" id="targetUrl" placeholder="https://youtube.com/watch?... OR MediaFire URL">
+            <input type="url" id="targetUrl" placeholder="https://youtube.com/... OR MediaFire URL">
 
             <label for="qualitySelect">Preferred Video Quality</label>
             <select id="qualitySelect" style="background: var(--console-bg); border: 1px solid var(--glass-border); color: var(--text-main); padding: 12px; border-radius: 8px;">
@@ -41,7 +30,7 @@
                 <option value="audio">Audio Only (MP3/M4A)</option>
             </select>
 
-            <button id="startBtn" class="btn-primary">Initialize Job Workflow</button>
+            <button id="startBtn" class="btn-primary">Initialize Job</button>
         </section>
 
         <section class="status-board glass-panel-inner">
@@ -56,7 +45,7 @@
             </div>
 
             <div class="console">
-                <pre id="logConsole">> System initialized. Ensure YT_COOKIES is set in GitHub Secrets if downloading from YouTube.</pre>
+                <pre id="logConsole">> System initialized.</pre>
             </div>
         </section>
     </main>
