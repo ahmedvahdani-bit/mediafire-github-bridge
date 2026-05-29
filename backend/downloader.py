@@ -37,7 +37,6 @@ class UniversalDownloader:
         """Handles YouTube, Generic Direct Links, and single MediaFire files using yt-dlp."""
         logger.info(f"Using yt-dlp to process: {url}")
         
-        # Map quality input to yt-dlp format codes
         format_string = 'bestvideo+bestaudio/best'
         if quality == '1080p':
             format_string = 'bestvideo[height<=1080]+bestaudio/best[height<=1080]'
@@ -49,9 +48,12 @@ class UniversalDownloader:
         ydl_opts = {
             'format': format_string,
             'outtmpl': os.path.join(output_dir, '%(title)s.%(ext)s'),
-            'restrictfilenames': True,  # Ensures safe filenames
+            'restrictfilenames': True,
             'no_warnings': True,
-            'merge_output_format': 'mp4', # Prefer mp4 for videos
+            'merge_output_format': 'mp4',
+            # NEW: Bypass YouTube bot checks by forcing specific client headers
+            'extractor_args': {'youtube': {'player_client': ['web', 'default']}},
+            'nocheckcertificate': True
         }
 
         try:
@@ -59,7 +61,6 @@ class UniversalDownloader:
                 info_dict = ydl.extract_info(url, download=True)
                 downloaded_file_path = ydl.prepare_filename(info_dict)
                 
-                # Check if it was merged into a different extension (like .mp4 or .mkv)
                 base, ext = os.path.splitext(downloaded_file_path)
                 expected_merged_path = base + '.' + ydl_opts.get('merge_output_format', 'mp4')
                 
