@@ -34,7 +34,7 @@ class UniversalDownloader:
             return []
 
     def download_with_ytdlp(self, url: str, quality: str, output_dir: str) -> str:
-        """Handles YouTube, Generic Direct Links, and single MediaFire files using yt-dlp."""
+        """Handles YouTube, Generic Direct Links using yt-dlp and injects cookies if available."""
         logger.info(f"Using yt-dlp to process: {url}")
         
         format_string = 'bestvideo+bestaudio/best'
@@ -51,10 +51,20 @@ class UniversalDownloader:
             'restrictfilenames': True,
             'no_warnings': True,
             'merge_output_format': 'mp4',
-            # NEW: Bypass YouTube bot checks by forcing specific client headers
-            'extractor_args': {'youtube': {'player_client': ['web', 'default']}},
             'nocheckcertificate': True
         }
+
+        # Handle YouTube Cookies from GitHub Secrets
+        cookies_content = os.environ.get("YT_COOKIES", "")
+        if cookies_content and cookies_content.strip():
+            cookies_path = os.path.join(output_dir, "cookies.txt")
+            try:
+                with open(cookies_path, "w", encoding="utf-8") as f:
+                    f.write(cookies_content)
+                ydl_opts['cookiefile'] = cookies_path
+                logger.info("✅ YouTube cookies loaded successfully from GitHub Secrets.")
+            except Exception as e:
+                logger.error(f"Failed to write cookies file: {e}")
 
         try:
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
