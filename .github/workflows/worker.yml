@@ -1,15 +1,20 @@
-name: MediaFire Chunk Fetcher
+name: Universal Chunk Fetcher V2
 
 on:
   workflow_dispatch:
     inputs:
-      mediafire_url:
-        description: 'MediaFire File or Folder URL'
+      target_url:
+        description: 'Download URL (MediaFire, YouTube, or Direct Link)'
         required: true
         type: string
       job_id:
         description: 'Unique Job ID'
         required: true
+        type: string
+      quality:
+        description: 'Preferred Quality (best, 1080p, 720p, audio)'
+        required: false
+        default: 'best'
         type: string
 
 permissions:
@@ -31,34 +36,31 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
+          # Install ffmpeg for yt-dlp video/audio merging
+          sudo apt-get update && sudo apt-get install -y ffmpeg
 
       - name: Run Backend Automation
         env:
-          MEDIAFIRE_URL: ${{ github.event.inputs.mediafire_url }}
+          TARGET_URL: ${{ github.event.inputs.target_url }}
           JOB_ID: ${{ github.event.inputs.job_id }}
+          QUALITY: ${{ github.event.inputs.quality }}
         run: python -m backend.worker
 
       - name: Commit and Push Chunks (Recursive & Incremental)
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          
-          # Increase Git HTTP buffer size to prevent timeout errors
           git config --global http.postBuffer 1048576000
           
           JOB_DIR="data/jobs/${{ github.event.inputs.job_id }}"
           
-          # Check if job directory exists
           if [ -d "$JOB_DIR" ]; then
-            # Use 'find' command to recursively search through all specific file sub-folders
             find "$JOB_DIR" -type f | while read -r FILE; do
               echo "Committing and pushing $FILE..."
               git add "$FILE"
-              git commit -m "Auto-upload chunk: $(basename "$FILE")" || echo "Nothing to commit for $FILE"
-              
-              # Push with a retry mechanism in case of temporary network glitches
-              git push origin main || (echo "Push failed, retrying in 10 seconds..." && sleep 10 && git push origin main)
+              git commit -m "Auto-upload: $(basename "$FILE")" || echo "Nothing to commit for $FILE"
+              git push origin main || (echo "Push failed, retrying..." && sleep 10 && git push origin main)
             done
           else
-            echo "No job directory found to upload."
+            echo "No job directory found."
           fi
