@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GitHub Automation Bridge</title>
+    <title>Universal Cloud Bridge V2</title>
     <link rel="stylesheet" href="style.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
 </head>
@@ -11,27 +11,35 @@
     <div class="background-mesh"></div>
     <main class="container glass-panel">
         <header>
-            <h1>☁️ GitHub Automation Bridge</h1>
-            <p>Automated Large File Chunking & Upload System</p>
+            <h1>Universal Cloud Bridge <span style="color:var(--primary)">V2</span></h1>
+            <p>Support: MediaFire, YouTube, Twitter, Direct Links</p>
         </header>
 
         <section class="form-group">
-            <label for="patToken">GitHub PAT Token (Secret)</label>
+            <label for="patToken">GitHub PAT Token</label>
             <input type="password" id="patToken" placeholder="ghp_xxxxxxxxxxxxxxxxxxxx">
             
-            <div>
-                <div>
+            <div class="row">
+                <div class="col">
                     <label for="ghUser">GitHub Username</label>
                     <input type="text" id="ghUser" placeholder="e.g. torvalds">
                 </div>
-                <div>
+                <div class="col">
                     <label for="ghRepo">Repository Name</label>
-                    <input type="text" id="ghRepo" placeholder="e.g. mediafire-bridge">
+                    <input type="text" id="ghRepo" placeholder="e.g. cloud-bridge">
                 </div>
             </div>
 
-            <label for="mfUrl">MediaFire URL</label>
-            <input type="url" id="mfUrl" placeholder="https://www.mediafire.com/file/...">
+            <label for="targetUrl">Download URL</label>
+            <input type="url" id="targetUrl" placeholder="https://youtube.com/watch?... OR MediaFire URL">
+
+            <label for="qualitySelect">Preferred Video Quality (Ignored for normal files)</label>
+            <select id="qualitySelect" style="background: var(--console-bg); border: 1px solid var(--glass-border); color: var(--text-main); padding: 12px; border-radius: 8px;">
+                <option value="best">Best Available (Max Quality)</option>
+                <option value="1080p">Up to 1080p</option>
+                <option value="720p">Up to 720p</option>
+                <option value="audio">Audio Only (MP3/M4A)</option>
+            </select>
 
             <button id="startBtn" class="btn-primary">Initialize Job Workflow</button>
         </section>
@@ -44,11 +52,12 @@
             
             <div class="job-info">
                 <p><strong>Job ID:</strong> <span id="currentJobId">N/A</span></p>
-                <p><strong>Codeload Link:</strong> <a href="#" id="codeloadLink" target="_blank" class="disabled">Generating...</a></p>
+                <p><strong>Codeload:</strong> <a href="#" id="codeloadLink" target="_blank" class="disabled">Generating...</a></p>
+                <p><strong>Raw Manifest:</strong> <a href="#" id="rawManifestLink" target="_blank" class="disabled">Check Status Data</a></p>
             </div>
 
             <div class="console">
-                <pre id="logConsole">> Waiting for system initialization...</pre>
+                <pre id="logConsole">> System initialized and ready for inputs...</pre>
             </div>
         </section>
     </main>
