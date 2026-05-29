@@ -1,7 +1,6 @@
 // --- CONFIGURATION ---
-// Hardcode public details here to simplify the UI
-const GITHUB_USERNAME = "YOUR_USERNAME_HERE"; // مثال: ahmedvahdani-bit
-const GITHUB_REPO = "YOUR_REPO_NAME_HERE";    // مثال: mediafire-github-bridge
+const GITHUB_USERNAME = "ahmedvahdani-bit";
+const GITHUB_REPO = "mediafire-github-bridge";  
 // ---------------------
 
 document.getElementById('startBtn').addEventListener('click', async () => {
