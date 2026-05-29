@@ -1,106 +1,90 @@
 import os
 import sys
-import re
-from urllib.parse import unquote
 from .utils import logger, ensure_directory, get_env_var
-from .downloader import MediaFireDownloader
+from .downloader import UniversalDownloader
 from .splitter import FileSplitter
 from .manifest import create_master_manifest
 
 def main():
-    logger.info("--- Starting GitHub Actions Automation Worker ---")
+    logger.info("--- Starting Universal Downloader V2 ---")
     
-    # Retrieve dynamic inputs
-    mediafire_url = get_env_var("MEDIAFIRE_URL")
+    target_url = get_env_var("TARGET_URL")
     job_id = get_env_var("JOB_ID")
+    quality = get_env_var("QUALITY", "best")
     
-    # Setup directories
     job_dir = os.path.join("data", "jobs", job_id)
-    ensure_directory(job_dir)
-    
     temp_dir = os.path.join("data", "temp")
+    ensure_directory(job_dir)
     ensure_directory(temp_dir)
     
+    downloader = UniversalDownloader()
+    splitter = FileSplitter(chunk_size_mb=90)
+    all_files_metadata = []
+    
     try:
-        downloader = MediaFireDownloader()
-        
-        # Phase 1: Resolve URLs
-        logger.info(f"Analyzing Target URL: {mediafire_url}")
-        file_urls = downloader.resolve_urls(mediafire_url)
-        
-        if not file_urls:
-            logger.error("No valid files found to download. Exiting.")
+        # Determine Flow based on URL type
+        urls_to_process = []
+        if downloader.is_mediafire_folder(target_url):
+            logger.info("MediaFire Folder flow selected.")
+            urls_to_process = downloader.resolve_mediafire_folder(target_url)
+        else:
+            logger.info("Single Link / YouTube flow selected.")
+            urls_to_process = [target_url]
+
+        if not urls_to_process:
+            logger.error("No extractable links found.")
             sys.exit(1)
+
+        for index, url in enumerate(urls_to_process, start=1):
+            logger.info(f"\n>>> Processing Link {index}/{len(urls_to_process)} <<<")
             
-        splitter = FileSplitter(chunk_size_mb=90)
-        all_files_metadata = []
-        
-        # Loop through each found file
-        for index, file_url in enumerate(file_urls, start=1):
-            logger.info(f"\n>>> Processing File {index} of {len(file_urls)} <<<")
-            
-            # Extract original filename
-            filename_match = re.search(r'/file/[^/]+/([^/]+)', file_url)
-            if filename_match:
-                original_name = unquote(filename_match.group(1))
-                original_name = re.sub(r'[\\/*?:"<>|]', "", original_name)
-            else:
-                original_name = f"downloaded_file_{index}.bin"
+            try:
+                # Download using the universal yt-dlp engine
+                downloaded_file_path = downloader.download_with_ytdlp(url, quality, temp_dir)
                 
-            file_base_name = os.path.splitext(original_name)[0]
-            if not file_base_name:
-                file_base_name = f"file_{index}"
+                original_name = os.path.basename(downloaded_file_path)
+                file_base_name = os.path.splitext(original_name)[0]
                 
-            file_specific_dir = os.path.join(job_dir, file_base_name)
-            
-            # -------------------------------------------------------------
-            # NEW LOGIC: Check if file already exists to Skip/Resume
-            # -------------------------------------------------------------
-            if os.path.exists(file_specific_dir) and os.listdir(file_specific_dir):
-                logger.info(f"⏭️ SKIPPING: Folder '{file_base_name}' already exists and contains files.")
+                file_specific_dir = os.path.join(job_dir, file_base_name)
                 
-                # Read existing files to include them in the manifest
-                existing_chunks = sorted([f for f in os.listdir(file_specific_dir) if os.path.isfile(os.path.join(file_specific_dir, f))])
+                # Resume/Skip Logic
+                if os.path.exists(file_specific_dir) and os.listdir(file_specific_dir):
+                    logger.info(f"⏭️ SKIPPING: Folder '{file_base_name}' already exists.")
+                    existing_chunks = sorted([f for f in os.listdir(file_specific_dir) if os.path.isfile(os.path.join(file_specific_dir, f))])
+                    all_files_metadata.append({
+                        "original_filename": original_name,
+                        "folder_name": file_base_name,
+                        "total_chunks": len(existing_chunks),
+                        "chunks": [f"{file_base_name}/{c}" for c in existing_chunks]
+                    })
+                    if os.path.exists(downloaded_file_path):
+                        os.remove(downloaded_file_path) # Cleanup temp
+                    continue
+                
+                ensure_directory(file_specific_dir)
+                
+                # Split Logic
+                logger.info(f"Splitting {original_name} into {file_specific_dir}")
+                chunks = splitter.split(downloaded_file_path, file_specific_dir)
                 
                 all_files_metadata.append({
                     "original_filename": original_name,
                     "folder_name": file_base_name,
-                    "total_chunks": len(existing_chunks),
-                    "chunks": [f"{file_base_name}/{c}" for c in existing_chunks]
+                    "total_chunks": len(chunks),
+                    "chunks": [f"{file_base_name}/{c}" for c in chunks]
                 })
-                continue # Skip downloading and splitting, go to the next file
-            # -------------------------------------------------------------
-            
-            ensure_directory(file_specific_dir)
-            temp_filepath = os.path.join(temp_dir, f"temp_{index}.tmp")
-            
-            # Phase 2: Download
-            downloader.download_file(file_url, temp_filepath)
-            
-            # Rename temp file to original name for accurate splitting
-            final_temp_path = os.path.join(temp_dir, original_name)
-            os.rename(temp_filepath, final_temp_path)
-            
-            # Phase 3: Split into the specific sub-directory
-            logger.info(f"Splitting {original_name} into folder: {file_specific_dir}")
-            chunks = splitter.split(final_temp_path, file_specific_dir)
-            
-            # Store metadata
-            all_files_metadata.append({
-                "original_filename": original_name,
-                "folder_name": file_base_name,
-                "total_chunks": len(chunks),
-                "chunks": [f"{file_base_name}/{c}" for c in chunks]
-            })
-        
-        # Phase 4: Master Manifest Generation
-        logger.info("\nGenerating master manifest for all files...")
+                
+            except Exception as item_err:
+                logger.error(f"Failed to process item {url}: {item_err}")
+                continue # Continue with the next file even if one fails
+
+        # Master Manifest Generation
+        logger.info("\nGenerating master manifest...")
         create_master_manifest(job_id, all_files_metadata, job_dir)
-        
-        logger.info("--- Worker Execution Completed Successfully ---")
+        logger.info("--- V2 Worker Execution Completed ---")
         
     except Exception as e:
-        logger.error(f"Job failed: {e}")
+        logger.error(f"Critical Job failure: {e}")
         sys.exit(1)
 
 if __name__ == "__main__":
